@@ -1,0 +1,57 @@
+# DDEV プロジェクト設定
+
+name: __PROJECT_NAME__
+type: wordpress
+docroot: ""
+php_version: "__PHP_VERSION__"
+webserver_type: nginx-fpm
+
+database:
+  type: mariadb
+  version: "__MARIADB_VERSION__"
+
+# --- ルーティング（クリーン URL）---
+# ルータポートは全プロジェクト共通。共有 VM 上の Traefik が 1 つで 80/443 を占有し、
+# Host ヘッダ（FQDN）で各プロジェクトへ振り分けるため、ここをプロジェクトごとに変えてはならない。
+router_http_port: "80"
+router_https_port: "443"
+project_tld: __PROJECT_TLD__            # __FQDN__ を正規 URL にする（DDEV_PRIMARY_URL=https://__FQDN__）
+use_dns_when_possible: false            # __FQDN__ を /etc/hosts で解決（外部 DNS から取らない）
+__ADDITIONAL_FQDNS_BLOCK__
+timezone: Asia/Tokyo
+
+# --- Mailpit（プロジェクトごとに別ポート）---
+# ルータと違い Mailpit はプロジェクトごとにホストのポートを占有する。
+# 共有 VM 上で複数プロジェクトを同時起動するため、重複すると起動に失敗する。
+# 値は generate.sh が既知プロジェクトの使用中ポートを避けて採番する（HTTPS 起点 8026 / 刻み 2）。
+mailpit_http_port: "__MAILPIT_HTTP_PORT__"
+mailpit_https_port: "__MAILPIT_HTTPS_PORT__"
+
+default_container_timeout: "600"        # 大容量 DB restore のため
+
+webimage_extra_packages:
+  - fonts-ipafont                       # PDF 生成系で利用される可能性あり
+
+composer_version: "2"
+nodejs_version: ""                      # フロントは別途ホストの Node でビルドする想定（未指定）
+
+upload_dirs:
+  - wp-content/uploads
+
+xdebug_enabled: false                   # 既定 off、必要時 `ddev xdebug on`
+
+# xhgui は使わない。既定の xhgui モードはプロファイル結果を MariaDB へ無制限に蓄積し、
+# 実績として 85GB まで肥大化して VM ディスクを枯渇させ web コンテナを起動不能にした。
+# prof モードならファイル出力のみで DB を汚さない。必要時 `ddev xhprof on`。
+xhprof_mode: prof
+
+# wp-config.php を DDEV に書き換えさせないための設定保護。
+#
+# ★★★ 重要 ★★★
+# 初回 ddev start で wp-config-ddev.php を生成させるため、最初は false にしている。
+# 生成され、wp-config.php 末尾に require 行が入ったことを確認したら、
+# 必ず true に切替えてコミットすること（手順書 §「設定保護を有効化」を参照）。
+# false のまま運用すると DDEV が wp-config.php を自動編集し、独自定数が壊れる恐れがある。
+disable_settings_management: false
+
+omit_containers: [dba]                  # PHPMyAdmin は使わない

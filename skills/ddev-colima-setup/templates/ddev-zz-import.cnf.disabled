@@ -1,0 +1,17 @@
+# .ddev/mysql/zz-import.cnf.disabled
+# 【一時運用】大容量 dump 投入時のみ拡張子を ".cnf" へ変更して有効化。
+# 投入完了後に必ず ".disabled" へ戻して ddev restart すること。
+#
+# 命名規則の根拠:
+#   DDEV の MariaDB は /etc/mysql/conf.d/*.cnf をアルファベット順に読む。
+#   "zz-" プレフィックスにより __PROJECT_NAME__.cnf より後に読み込まれ、同名キーを最終勝者として上書きできる。
+#   ".disabled" 拡張子で git 管理 → 「ファイル名 = 有効/無効のシグナル」を構造的に保証し、
+#   コメントアウト忘れによる事故をなくす。
+
+[mysqld]
+innodb_doublewrite             = 0   # crash safety を犠牲に書き込み I/O を半減
+innodb_flush_log_at_trx_commit = 0   # 大量 INSERT のスループット最大化（再起動で 1 秒分損失可）
+# 注: unique_checks / foreign_key_checks は SESSION 専用変数。[mysqld]（起動オプション）に
+#     書くと MariaDB が "unknown variable" で起動を中止する（exit 7）。これらは
+#     mysqldump 出力先頭の SET UNIQUE_CHECKS=0 / SET FOREIGN_KEY_CHECKS=0 が import
+#     セッション内で自動的に無効化するため、ここに書く必要はない。

@@ -1,0 +1,64 @@
+# PHP バージョン移行のゲート判定に使う PHPStan identifier ホワイトリスト（既定値）
+#
+# 1行1 identifier。`#` から行末までコメント。末尾 `*` でワイルドカード（例: `offsetAccess.*`）。
+# `scripts/phpstan-gate.sh --identifiers-file=<path>` で差し替えられる。
+#
+# ── このファイルの規約 ─────────────────────────────────────────
+#
+# 1. **PHP の仕様に由来する identifier のみを載せる。**
+#    フレームワーク固有・プロジェクト固有の指摘を足さない。足すと、移行の合否判定に
+#    移行と無関係な品質指摘が混ざり、ゲートが「常に赤い」状態になって無効化される。
+#
+# 2. **このホワイトリスト自体が allowlist であり、漏れる。**
+#    実例: ある移行で `property.notFound` が4系統のホワイトリストから漏れ、
+#    未定義プロパティへのアクセス（PHP 8.0 で Notice → Warning へ格上げ）が
+#    1件、未仕分けのまま残っていた。
+#    → **定義時に denylist 原則を適用する。** `references/detection-gates.md` §2 の
+#      全 identifier を候補に置き、**除外するものは1件ずつ理由を記録する**。
+#      「思いついたものを列挙する」方式にしない。
+#
+# 3. **下限 level はここに書かない。** 数値の正は `references/detection-gates.md` §2 であり、
+#    その値はプロジェクトごとに `scripts/probe-phpstan-levels.sh` を実行して得る。
+#
+# ── 測定条件（この既定値を決めたときの実測環境） ───────────────
+#   PHPStan 2.2.6 / phpVersion 80300 / level 0-10 総当たり / stub なし（検体自己完結）
+#   検体: scripts/probes/phpstan/ ／ 実測日 2026-08-05
+#   下限 level は「型の分かり具合」で2〜3段動く。詳細は detection-gates.md §2 の2次元表。
+
+# ── オフセットアクセス系（PHP 8.0: Notice → Warning） ──
+offsetAccess.notFound
+offsetAccess.nonOffsetAccessible
+offsetAccess.invalidOffset
+
+# ── プロパティ系（PHP 8.0: Notice → Warning ／ PHP 8.2: 動的プロパティ Deprecated） ──
+property.nonObject
+property.notFound
+
+# ── 変数・反復（PHP 8.0: Notice → Warning） ──
+variable.undefined
+foreach.nonIterable
+
+# ── 静的コンテキストからの非 static 呼び出し（PHP 8.0: Deprecated → Fatal） ──
+method.staticCall
+
+# ── 文字列化（PHP 8.0: Array to string conversion が Notice → Warning） ──
+echo.nonString
+cast.string
+encapsedStringPart.nonString
+
+# ── 内部関数への null / 型不一致（PHP 8.1: Passing null to non-nullable が Deprecated） ──
+# ★ ホワイトリスト中で**最も広くノイジー**である。実測例では level 9 で 149 件出た。
+#   ただし「うるさいから外す」で片づけない。8.1 Deprecated に直結する群が確実に含まれる。
+#   件数が仕分け不能なら、メッセージによる二次フィルタ（`string|null given` 等に絞る）を
+#   先に検討する。**外す場合は FR-5 に従い除外理由を報告へ記録する**（黙って外さない）。
+argument.type
+
+# ── 比較セマンティクス（PHP 8.0: 文字列⇔数値比較の変更） ──
+# ★ **両辺の型が静的に確定する場合しか出ない。** DB・外部入力由来の mixed には
+#   原理的に無力であり、`in_array()` の第3引数なし呼び出しは**一切検出できない**。
+#   この identifier が 0 件でも「比較セマンティクスの影響なし」を意味しない。
+#   検出不能な範囲は `references/breaking-changes.md` §7 が引き受ける。
+equal.alwaysFalse
+equal.alwaysTrue
+if.alwaysTrue
+if.alwaysFalse

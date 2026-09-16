@@ -1,0 +1,70 @@
+# .ddev/mysql/__PROJECT_NAME__.cnf
+# MariaDB 常時設定。
+# - 標準規模の WordPress（DB ダンプ数十〜数百MB）を前提に、実データ全体が buffer pool に載る配分
+# - 共有 Colima VM に同時 3 プロジェクトが載る前提。値は「1 台分」ではなく「× 3」で効く
+# - DDEV は本ファイルを /etc/mysql/conf.d/ にマウントし、my.cnf 後勝ちで上書きする
+
+[mysqld]
+
+# --- InnoDB バッファプール ---
+# 標準規模なら 512M で実データ全体が載る。3 プロジェクト同時起動で 1.5GiB となり、
+# 共有 VM メモリ 8GiB の 50%（4GiB）以内に収まる（generate.sh がこの条件を警告で見張る）。
+# GB 級の DB を扱うプロジェクトのみ --innodb-buffer-pool で個別に引き上げる。
+# instances / chunk_size は MariaDB 10.6+ で自動最適化（11.4 で instances は removed）。
+innodb_buffer_pool_size       = __INNODB_BUFFER_POOL__
+
+# --- redo log ---
+innodb_log_file_size   = 256M            # buffer pool の 1/4 が目安。1G は大量 INSERT 前提の値
+innodb_log_buffer_size = 16M
+
+# --- I/O ポリシー ---
+innodb_flush_log_at_trx_commit = 2       # 開発機: 1 秒間隔 flush で速度優先。本番では 1
+innodb_flush_method            = O_DIRECT
+innodb_io_capacity             = 2000    # NVMe 想定。既定 200 は HDD 向け（メモリを消費しないため据置）
+innodb_io_capacity_max         = 4000
+
+# --- ネットワーク／パケット ---
+max_allowed_packet  = 256M               # 1 行（BLOB 含む）の上限。dump 全体のサイズではない
+net_read_timeout    = 600
+net_write_timeout   = 600
+
+# --- 観測コスト削減 ---
+performance_schema = OFF                  # 開発機メモリ節約。共有 VM では 3 プロジェクト分効く
+
+# --- 個人情報保護（絶対 ON にしないこと）---
+general_log = 0                           # ON にすると全 SQL（個人情報を含む WHERE 句等）が記録される
+
+# --- 文字コード（明示）---
+character-set-server = utf8mb4
+collation-server     = utf8mb4_unicode_ci
+init-connect         = 'SET NAMES utf8mb4'
+
+# --- タイムゾーン（コンテナ TZ と整合）---
+default-time-zone = '+09:00'
+
+# --- SQL モード（strict mode 強化で既存マイグレが落ちるのを回避）---
+sql_mode = "ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+
+# --- セッションバッファ ---
+# 接続ごとに確保されるため「接続数 × プロジェクト数」で効く。ここを絞る効果が最も大きい。
+# 一括取込の主戦場は zz-import.cnf 側であり、常時設定を大きくする必要はない。
+sort_buffer_size        = 1M
+read_buffer_size        = 1M
+read_rnd_buffer_size    = 2M
+join_buffer_size        = 2M
+bulk_insert_buffer_size = 16M
+
+# --- 長時間 CLI セッション ---
+wait_timeout         = 28800
+interactive_timeout  = 28800
+
+[mysqldump]
+quick
+quote-names
+max_allowed_packet = 256M
+
+[client]
+default-character-set = utf8mb4
+
+[mysql]
+default-character-set = utf8mb4

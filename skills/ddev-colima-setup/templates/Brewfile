@@ -1,0 +1,18 @@
+# 開発環境のホスト側依存（DDEV + Colima）
+# 使い方: brew bundle --file=./Brewfile
+
+# --- コンテナランタイム ---
+brew "colima"
+brew "lima"
+
+# --- Docker CLI 群（Colima は CLI を同梱しないため必須）---
+brew "docker"
+brew "docker-buildx"    # DDEV v1.25.1+ が必須化
+brew "docker-compose"
+
+# --- DDEV 本体 ---
+brew "ddev/ddev/ddev"
+
+# --- ローカル HTTPS 信頼証明書 ---
+brew "mkcert"
+brew "nss"              # Firefox 用に mkcert が要求
