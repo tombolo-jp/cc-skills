@@ -43,6 +43,29 @@ Claude Code 上で以下を実行します：
 
 既定で user スコープ（`~/.claude/settings.json`）に記録されるため、**一度実行すれば手元の全プロジェクトで使えます**。プロジェクトごとの設定は不要です。
 
+> **前提: GitHub への SSH 接続が必要です（ローカル導入のみ）。** プラグイン本体のクローンは
+> `git@github.com:tombolo-jp/cc-skills.git` の形式で実行されるため、SSH 鍵が未設定だと
+> 次のように失敗します。**リポジトリは public ですが、HTTPS ではクローンされません。**
+>
+> ```
+> ✘ Failed to install plugin "cc-skills@tombolo-jp": Failed to clone repository:
+> git@github.com: Permission denied (publickey).
+> ```
+>
+> エラー文面は「リポジトリが存在しないか権限が無い」と読めますが、原因は SSH 鍵です。
+> 未設定の場合は [GitHub の手順](https://docs.github.com/authentication/connecting-to-github-with-ssh)
+> に従って鍵を作成・登録したうえで、**プラグイン導入より先に一度**次を実行してください。
+>
+> ```bash
+> ssh -T git@github.com   # Hi <ユーザー名>! ... と出れば成功（終了コード 1 は正常）
+> ```
+>
+> **この事前接続は省略できません。** クローン時の ssh は `BatchMode=yes` /
+> `StrictHostKeyChecking=yes` で起動するため、`~/.ssh/known_hosts` に github.com が
+> 無いとホストキーの確認プロンプトを出せずに失敗します。鍵を登録しただけでは足りません。
+>
+> なお A-2 のクラウドセッションではこの準備は不要です（コンテナ側で認証されます）。
+
 **A-2. クラウドセッションで使う**
 
 クラウドセッションは毎回まっさらな VM でリポジトリをクローンして起動するため、**手元の `~/.claude` の設定は一切引き継がれません**。A-1 を実行済みでもクラウドには反映されないので、以下のどちらかが別途必要です。クラウドセッションでは `/plugin` コマンド自体が使えないため、セッション内で後から導入することもできません。
