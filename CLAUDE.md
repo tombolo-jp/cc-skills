@@ -30,9 +30,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     "source": "github",
     "repo": "tombolo-jp/cc-skills"
   },
-  "description": "PHPバージョンアップ・DDEV/Colima 環境構築・ブラウザ自動操作・プロジェクト文書整備を支援する Claude Code スキル集",
+  "description": "PHPバージョンアップ・DDEV/Colima 環境構築・ブラウザ自動操作・プロジェクト文書整備・Figma デザインからのコーディングを支援する Claude Code スキル集",
   "category": "development",
-  "keywords": ["php", "wordpress", "ddev", "colima", "playwright", "documentation"]
+  "keywords": ["php", "wordpress", "ddev", "colima", "playwright", "documentation", "figma", "design", "mcp"]
 }
 ```
 

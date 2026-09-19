@@ -1,6 +1,6 @@
 {
   "name": "cc-skills",
-  "description": "PHPバージョンアップ・DDEV/Colima 環境構築・ブラウザ自動操作・プロジェクト文書整備を支援する Claude Code スキル集",
+  "description": "PHPバージョンアップ・DDEV/Colima 環境構築・ブラウザ自動操作・プロジェクト文書整備・Figma デザインからのコーディングを支援する Claude Code スキル集",
   "author": {
     "name": "Yuki Kokubo",
     "url": "https://github.com/tombolo-jp"
@@ -14,6 +14,9 @@
     "ddev",
     "colima",
     "playwright",
-    "documentation"
+    "documentation",
+    "figma",
+    "design",
+    "mcp"
   ]
 }

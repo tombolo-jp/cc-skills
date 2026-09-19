@@ -1,6 +1,6 @@
 # CC Skills
 
-Claude Code 用のカスタムスキル集です。PHP バージョンアップ対応、DDEV + Colima のローカル開発環境構築、ブラウザ自動操作、プロジェクト文書の整備を、それぞれ 1 コマンドで進められます。
+Claude Code 用のカスタムスキル集です。PHP バージョンアップ対応、DDEV + Colima のローカル開発環境構築、ブラウザ自動操作、プロジェクト文書の整備、Figma デザインからのコーディングを、それぞれ 1 コマンドで進められます。
 
 ## 収録スキル
 
@@ -10,6 +10,7 @@ Claude Code 用のカスタムスキル集です。PHP バージョンアップ�
 | [`/ddev-colima-setup`](skills/ddev-colima-setup/) | macOS (Apple Silicon) 向けに DDEV + Colima の WordPress 環境一式を生成する | **生成まで**（起動は手元の macOS） |
 | [`/playwright-cli`](skills/playwright-cli/) | `playwright-cli` によるブラウザ操作・Web ページのテスト | 利用可（ヘッドレスのみ） |
 | [`/setup-project-docs`](skills/setup-project-docs/) | コードベースを解析し `.claude/docs/` `.claude/rules/` と `CLAUDE.md` を整備する | 利用可 |
+| [`/figma-coding`](skills/figma-coding/) | Figma MCP で読み取ったデザインを実装する際の規約・チェックリスト集（取得→記録→実装→検証） | 利用可（Figma PAT を環境変数で渡す必要あり） |
 
 ## インストール
 
@@ -168,6 +169,8 @@ cp -r cc-skills/skills/* ~/.claude/skills/
 
 特定のプロジェクトだけで使う場合は、コピー先を `<project>/.claude/skills/` にしてください。
 
+> **`/figma-coding` は MCP サーバーに依存します。** どちらの方式で導入しても、スキル本体は MCP サーバーを同梱しません。利用側リポジトリの `.mcp.json` に `figma-developer-mcp` を登録し、Figma の PAT を環境変数で渡してください（雛形は `skills/figma-coding/templates/mcp.json.example`。`.mcp.json` 自体は `.gitignore` に入れ、コミットするのは雛形の側です）。MCP が使えない場合、スキルは推測で値を埋めず、手動採寸へ切り替えるか停止します。
+
 ### 方式Aと方式Bの併用について
 
 **同一環境で方式Aと方式Bを併用しないでください。** 両方を導入すると `php-version-upgrade` などの短縮名を持つコマンドが二重に登録され、Claude Code は**先に見つかった方を警告なしに採用**します。どちらが起動したかは表示されないため、片方だけを更新した場合に古い定義が黙って使われ続けることがあります。
@@ -175,7 +178,8 @@ cp -r cc-skills/skills/* ~/.claude/skills/
 方式Aへ移行する場合は、先に個人スキル側を削除してください：
 ```bash
 rm -rf ~/.claude/skills/php-version-upgrade ~/.claude/skills/ddev-colima-setup \
-       ~/.claude/skills/playwright-cli ~/.claude/skills/setup-project-docs
+       ~/.claude/skills/playwright-cli ~/.claude/skills/setup-project-docs \
+       ~/.claude/skills/figma-coding
 ```
 
 ### 共通の設定
@@ -218,6 +222,14 @@ rm -rf ~/.claude/skills/php-version-upgrade ~/.claude/skills/ddev-colima-setup \
 - クラウドコンテナには Chromium が同梱されており、`PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers` で参照されます。**`playwright install` は実行しないでください**（`npm install -g @playwright/cli@latest` だけで足ります）。
 - ヘッドレス実行のみです。`--headed` は使えないため、ページの状態は `snapshot` で読み取ってください。
 
+**`/figma-coding`**
+
+- **本リポジトリで初めて MCP サーバーに依存するスキルです。** Figma MCP（`figma-developer-mcp`）が接続されていない環境では、スキルは値を推測せず、①`.mcp.json` を設定して再起動するか、②人が採寸・書き出しを供給する手動モードに切り替えるか、を確認して停止します。
+- **PAT は環境変数で渡します。** クラウドセッションには手元の `.env` が無いため、クラウド環境設定の **Environment variables** 欄に `FIGMA_API_KEY` を設定するか、**Setup script** で環境変数を用意してください。`.mcp.json` に実値を書かないでください。
+- **コミットするのは `.mcp.json.example` の側です。** `.mcp.json` は `.gitignore` に入れます（トークンが紛れ込むのは常に作業用ファイルの側のため）。クラウドセッションは手元の設定を引き継がないので、**セッション開始後にリポジトリのルートで `cp .mcp.json.example .mcp.json` を実行**してから使ってください。Setup script は環境単位でキャッシュされ**特定リポジトリのディレクトリを前提にできない**ため、この 1 行はセッション側で実行します（どうしても Setup script に置く場合は、非ゼロ終了でセッションが起動しなくなるのを避けるため `[ -f .mcp.json.example ] && cp .mcp.json.example .mcp.json || true` の形にしてください）。PAT を渡すのは Environment variables 側の役割で、こちらとは独立です。
+- **コンテナは破棄されます。** 記録文書（node-map / design-spec / 比較資料）と書き出した画像は、コミットしない限り残りません。
+- **検証工程はブラウザ自動化ツールに依存しません。** 手順として書かれているため、`/playwright-cli` は一例であり、セッションにあるツール（ヘッドレスを含む）で実施できます。
+
 ## リポジトリ構成
 
 ```
@@ -228,6 +240,7 @@ cc-skills/
 │                                 # tombolo-jp/cc-task-skills 側に置かれている
 ├── skills/
 │   ├── ddev-colima-setup/
+│   ├── figma-coding/
 │   ├── php-version-upgrade/
 │   ├── playwright-cli/
 │   └── setup-project-docs/
