@@ -65,6 +65,32 @@ Claude Code 上で以下を実行します：
 > `StrictHostKeyChecking=yes` で起動するため、`~/.ssh/known_hosts` に github.com が
 > 無いとホストキーの確認プロンプトを出せずに失敗します。鍵を登録しただけでは足りません。
 >
+> **鍵にパスフレーズがある場合は、エージェントへの登録も必須です。** `BatchMode=yes` は
+> パスフレーズの入力も求められないため、鍵が GitHub に登録済みでもクローンは同じ
+> `Permission denied (publickey)` で落ちます。次を一度実行してキーチェーンに載せてください
+> （macOS 以外では `--apple-use-keychain` を外す）。
+>
+> ```bash
+> ssh-add --apple-use-keychain ~/.ssh/id_ed25519
+> ssh-add -l   # 鍵が 1 行表示されれば OK。"The agent has no identities." なら未登録
+> ```
+>
+> 再起動後も有効にするには `~/.ssh/config` に次を書いておきます。
+>
+> ```
+> Host github.com
+>   IdentityFile ~/.ssh/id_ed25519
+>   AddKeysToAgent yes
+>   UseKeychain yes
+> ```
+>
+> **`Permission denied (publickey)` を「鍵が未登録」と即断しないでください。** 切り分けは
+> `ssh -vT git@github.com` の出力で行います。`Offering public key: ... SHA256:...` が
+> 出ていれば鍵は提示されており、未登録ではありません（その場合はパスフレーズ／エージェント側を疑う）。
+> また**ターミナルを介さない実行経路**（エディタのタスク、CI、エージェントからの実行など）では
+> TTY が無く、パスフレーズのプロンプトを出せずに同じエラーになります。手元のシェルで
+> `ssh -o BatchMode=yes -T git@github.com` が成功することを、切り分けの基準にしてください。
+>
 > なお A-2 のクラウドセッションではこの準備は不要です（コンテナ側で認証されます）。
 
 **A-2. クラウドセッションで使う**
