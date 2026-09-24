@@ -16,6 +16,11 @@
 #    → **定義時に denylist 原則を適用する。** `references/detection-gates.md` §2 の
 #      全 identifier を候補に置き、**除外するものは1件ずつ理由を記録する**。
 #      「思いついたものを列挙する」方式にしない。
+#    実例（2例目）: 非数値文字列との算術演算（PHP 8.0 で TypeError＝Fatal 化）の
+#      `binaryOp.invalid` / `assignOp.invalid` が漏れていた。`get_post_meta()` が返す `''` を
+#      そのまま計算する箇所が、静的ゲートを素通りした。
+#    → 検体（`scripts/probes/phpstan/`）の `@probe-expect` に現れる identifier が
+#      このファイルに全件載っていることを `scripts/tests/run-gate-tests.sh` で機械検査する。
 #
 # 3. **下限 level はここに書かない。** 数値の正は `references/detection-gates.md` §2 であり、
 #    その値はプロジェクトごとに `scripts/probe-phpstan-levels.sh` を実行して得る。
@@ -23,7 +28,13 @@
 # ── 測定条件（この既定値を決めたときの実測環境） ───────────────
 #   PHPStan 2.2.6 / phpVersion 80300 / level 0-10 総当たり / stub なし（検体自己完結）
 #   検体: scripts/probes/phpstan/ ／ 実測日 2026-08-05
+#   追補: PHPStan 2.2.8 / phpVersion 80300 / 必須パラメータ有効 ／ 実測日 2026-09-24
+#        （binaryOp.invalid / assignOp.invalid の追加と、汎用配列オフセットの検体追加）
 #   下限 level は「型の分かり具合」で2〜3段動く。詳細は detection-gates.md §2 の2次元表。
+#
+# ★ `offsetAccess.notFound` の一部（形状の無い汎用配列への `??` 無しの読み取り）は、
+#   level ではなく neon の必須パラメータでしか検出されない（detection-gates.md §2
+#   「必須パラメータ」）。このファイルに identifier を載せるだけでは足りない。
 
 # ── オフセットアクセス系（PHP 8.0: Notice → Warning） ──
 offsetAccess.notFound
@@ -40,6 +51,15 @@ foreach.nonIterable
 
 # ── 静的コンテキストからの非 static 呼び出し（PHP 8.0: Deprecated → Fatal） ──
 method.staticCall
+
+# ── 算術演算（PHP 8.0: 非数値文字列との算術が Warning → TypeError） ──
+# 7.4 では `'' - 1` が Warning と -1 で処理を続けていたが、8.0 以降は
+# `TypeError: Unsupported operand types: string - int` で**Fatal**になる。
+# `''` も非数値文字列に含まれる（`get_post_meta(..., true)` のメタ未登録時の戻り値）。
+# 先頭が数値の文字列（`'5abc'`）は 8.0 以降も Warning のままで TypeError にはならない。
+# `-=` 等の複合代入は `binaryOp.invalid` ではなく `assignOp.invalid` になるため両方を載せる。
+binaryOp.invalid
+assignOp.invalid
 
 # ── 文字列化（PHP 8.0: Array to string conversion が Notice → Warning） ──
 echo.nonString

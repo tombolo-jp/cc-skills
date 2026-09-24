@@ -72,12 +72,23 @@ WordPressの `wp_remote_get()` / `wp_remote_post()` は、通信失敗時（タ�
 | 関数 | stub 上の戻り値 | 対象が無いとき | 検出可否 | 典型的な誤用 | 対処 |
 |---|---|---|---|---|---|
 | `get_field()` | **`mixed`** | `false`（フィールド未設定）／`null` | **★検出不能・目視必須。** `mixed` なので何をしても指摘されない | `get_field('image')['sizes']['large']` —— 未設定なら `false` へのオフセットアクセス | 取得直後に `is_array()` / `is_string()` で分岐する。`?? ''` だけでは `false` を素通しする |
-| `get_fields()` | `array\|false` | **`false`** | `offsetAccess.nonOffsetAccessible`（union なので中程度の感度から） | `get_fields($id)['key']` を無ガードで参照 | `$f = get_fields($id); $f = is_array($f) ? $f : [];` を置き、以降は `$f['key'] ?? null` |
-| `get_field_object()` | `array\|false` | **`false`** | 同上 | `get_field_object('x')['choices'][$k]` | `['choices'][$k] ?? ''` ではなく、まず `false` を弾く |
+| `get_fields()` | `array\|false` | **`false`** | 無ガード: `offsetAccess.nonOffsetAccessible`（union なので中程度の感度から）。**`is_array()` 後の `??` 欠落: `offsetAccess.notFound`（必須パラメータ有効時のみ。無効なら最大感度でも 0 件）** | `get_fields($id)['key']` を無ガードで参照／**`is_array()` で確定させた後に `$f['key']` を `??` 無しで読む** | `$f = get_fields($id); $f = is_array($f) ? $f : [];` を置き、以降の `$f['key']` には **`is_array()` の後も `??` が必須**（`$f['key'] ?? null`）。キーの有無は `is_array()` では確定しない。守られているかは必須パラメータで機械検出できる |
+| `get_field_object()` | `array\|false` | **`false`** | 同上 | `get_field_object('x')['choices'][$k]` | `['choices'][$k] ?? ''` ではなく、まず `false` を弾く。弾いた後のキー読み取りに `??` が要るのも `get_fields()` と同じ |
 | `get_sub_field()` | `mixed` | `false` | **検出不能** | `get_field()` と同じ | 同上 |
 | `have_rows()` | `boolean` | `false` | — | — | — |
 
 > **`get_field()` が `mixed` であることが、この表の最大の情報である。** ACF を多用するコードでは、静的解析の「オフセットアクセス系 0 件」は**そのカテゴリを見ていないだけ**のことがある。`get_field()` の呼び出し箇所は**目視で列挙する**（`grep -n "get_field(" `）。
+
+> **`is_array()` は「配列であること」しか保証しない。キーがあることは保証しない。** `$f = is_array($f) ? $f : [];` の後の `$f` は形状の無い `array` であり、PHPStan は既定ではその読み取りを**最大 level でも報告しない**。`references/detection-gates.md` §2「必須パラメータ」の2設定を有効にすると `offsetAccess.notFound`（`Offset '...' might not exist on array`）として検出される。実例: 本番の `Warning: Undefined array key "period_start"` は、上表の旧版の推奨どおりに `is_array()` で確定させ、`??` を付けずに読んでいた箇所だった。設定を足すと同型が大量に見つかった（件数は `references/detection-gates.md` §2「必須パラメータ」の実例）。
+
+## `get_post_meta()` の `''`（空文字）
+
+`get_post_meta($id, $key, true)` は、メタが未登録のとき **`''` を返す**（`false` / `null` ではない）。この `''` をそのまま使うと、PHP 8.0 で Warning ではなく **TypeError（Fatal）**になる類型が2つある（`references/breaking-changes.md` §3）。
+
+| 誤用 | PHP 8 での結果 | PHPStan | 対処 |
+|---|---|---|---|
+| `$meta['email']`（配列のつもりで読む） | `TypeError: Cannot access offset of type string on string` | stub の戻り値宣言に依存する。`mixed` なら `offsetAccess.nonOffsetAccessible` が mixed 列の感度でしか出ない（`references/detection-gates.md` §2） | `is_array($meta)` で分岐する。`??` は**読み取りなら**抑止するが、**書き込み（`$meta['k']['first'] = 1`）は抑止しない** |
+| `$meta - 1` / `$meta * $rate`（数値のつもりで計算する） | `TypeError: Unsupported operand types: string - int` | `binaryOp.invalid` / `assignOp.invalid`（同じく `mixed` なら mixed 列の感度から） | `is_numeric()` で分岐する。`(int)` キャストで握りつぶすのは、`''` が「0」を意味する仕様のときだけにする（フォールバック値を捏造しない） |
 
 ## 「対象が無ければ `false`/`null` を返す」WordPress 関数
 

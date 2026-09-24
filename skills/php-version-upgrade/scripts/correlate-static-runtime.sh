@@ -254,12 +254,14 @@ case "${FORMAT}" in
 
     emit_section "[B] 実行時に出たが静的解析が沈黙した箇所:" "${B_KEYS}" "${RUNTIME}"
     printf '\n'
-    printf '  区分 B は**ツールの限界と結論づける前に、必ず次の4点を確認する**:\n'
+    printf '  区分 B は**ツールの限界と結論づける前に、必ず次の5点を確認する**:\n'
     printf '    1. そのカテゴリの下限 level を満たしているか（scripts/probe-phpstan-levels.sh で実測する）\n'
-    printf '    2. そのゲートの守備範囲か（references/detection-gates.md §1）\n'
-    printf '    3. 必要な stub / bootstrapFiles が入っているか（入っていないと型が mixed に落ちる）\n'
-    printf '    4. ignoreErrors / baseline に入っていないか\n'
-    printf '  → 4点すべてを否定できて初めて「ツールの原理的限界」と記録してよい。\n\n'
+    printf '    2. level と独立した感度パラメータが有効か（reportPossiblyNonexistent*ArrayOffset。\n'
+    printf '       references/detection-gates.md §2「必須パラメータ」。Undefined array key ならまずここ）\n'
+    printf '    3. そのゲートの守備範囲か（references/detection-gates.md §1）\n'
+    printf '    4. 必要な stub / bootstrapFiles が入っているか（入っていないと型が mixed に落ちる）\n'
+    printf '    5. ignoreErrors / baseline に入っていないか\n'
+    printf '  → 5点すべてを否定できて初めて「ツールの原理的限界」と記録してよい。\n\n'
 
     emit_section "[C] 静的解析のみ（仕分けの入力。実行時に出ないことは安全の証明ではない）:" "${C_KEYS}" "${STATIC_TSV}"
     printf '\n'

@@ -171,6 +171,12 @@ fi
 # 一時 neon は printf のみで生成する（C8: ユーザー指定の値を neon へ連結しない）。
 # paths は CLI 引数で渡す。tmpDir は level 間で**固定**する
 #（level ごとに変えると結果キャッシュが効かず、実測で 9.4 倍遅くなる。design §10.2）。
+#
+# ★ `reportPossiblyNonexistent*ArrayOffset` は**常に true** で測る。
+#   これはスキルが PHPStan 設定の必須項目としているもの（references/detection-gates.md §2
+#   「必須パラメータ」）であり、level とは独立した感度である。false のまま測ると
+#   形状の無い汎用配列への読み取り（検体 general-array-offset.php）がどの level でも
+#   出ず、「level を上げても検出できない＝ツールの限界」と誤読させる。
 
 php_major="${PHP_VERSION%%.*}"
 php_minor="${PHP_VERSION##*.}"
@@ -193,7 +199,7 @@ while :; do
     break
   fi
 
-  printf 'parameters:\n    level: %s\n    phpVersion: %s\n    tmpDir: %s\n' \
+  printf 'parameters:\n    level: %s\n    phpVersion: %s\n    tmpDir: %s\n    reportPossiblyNonexistentGeneralArrayOffset: true\n    reportPossiblyNonexistentConstantArrayOffset: true\n' \
     "${level}" "${php_version_int}" "${TMPD}/cache" > "${TMPD}/probe.neon"
 
   # S1: set -e 下では `|| exit_code=$?` で明示的に捕捉する。
@@ -377,6 +383,8 @@ EOF
     printf '| 走査 level 範囲 | %s〜%s |\n' "${LEVEL_MIN}" "${detected_max}"
     printf '| stub 構成 | **なし**（検体自身の PHPDoc から型を作る。プロジェクト非依存） |\n'
     # shellcheck disable=SC2016
+    printf '| 必須パラメータ | `reportPossiblyNonexistentGeneralArrayOffset` / `reportPossiblyNonexistentConstantArrayOffset` を true |\n'
+    # shellcheck disable=SC2016
     printf '| 検体ディレクトリ | `%s` |\n' "${probe_dir_rel}"
     printf '| マーカー件数 | %s |\n' "${marker_count}"
     printf '| 実行日 | %s |\n' "${CAPTION_DATE}"
@@ -384,6 +392,7 @@ EOF
   table)
     printf 'PHPStan probe: %s / phpVersion=%s / levels %s-%s / probes=%s\n' \
       "${CAPTION_TOOL}" "${php_version_int}" "${LEVEL_MIN}" "${detected_max}" "${PROBE_DIR}"
+    printf '必須パラメータ: reportPossiblyNonexistentGeneralArrayOffset / reportPossiblyNonexistentConstantArrayOffset = true\n'
     printf 'マーカー %s 件 / 実行 level 数 %s / 実行日 %s\n\n' "${marker_count}" "${runs}" "${CAPTION_DATE}"
     emit_pivot table
     ;;

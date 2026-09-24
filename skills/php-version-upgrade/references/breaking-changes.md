@@ -84,6 +84,8 @@ REST API・CSV/Excelインポート等、**外部入力を扱う配列アクセ�
 | null を非nullable内部関数引数へ渡す | PHP 8.1 | Deprecated（将来的にTypeError化予定） |
 | 暗黙のfloat→int精度落ち | PHP 8.1 | Deprecated |
 | 数値文字列の比較 | PHP 8.0 | 非数値文字列との比較挙動が変更（`0 == "abc"` が false に） |
+| 非数値文字列（`''` を含む）との算術演算 | PHP 8.0 | Warning → **TypeError（Fatal）**。`'' - 1` / `'abc' - 1` は `Unsupported operand types: string - int` で停止する（7.4 は Warning と `-1` で処理が続いていた）。先頭が数値の文字列（`'5abc' - 1`）は Warning（`A non-numeric value encountered`）のまま。`get_post_meta(..., true)` がメタ未登録時に返す `''` をそのまま計算する類型が該当する。PHPStan `binaryOp.invalid` / `assignOp.invalid`（複合代入）で機械検出できる |
+| 文字列への文字列添字 | PHP 8.0 | `$s = ''; $s['email']` は Warning ではなく **TypeError（`Cannot access offset of type string on string`）**。`get_post_meta(..., true)` の `''` を配列として読む類型が該当する。`??` は読み取りなら抑止するが、**書き込み（`$s['k']['first'] = 1` で親が `''`）は抑止しない** |
 
 **キャストの副作用に注意**: `(string) $value` でnullを空文字化すると警告は消えるが、その値を `explode()` に渡すと `['']`（1要素配列）になる。後続コードが `$result[1]`, `$result[3]` 等の固定インデックスへ無条件アクセスしていると、そちらで新たな未定義キー警告が発生する。**機械置換はキャスト追加までは行うが、下流のインデックスアクセスの安全性までは保証しない**。人手レビューが必須。
 

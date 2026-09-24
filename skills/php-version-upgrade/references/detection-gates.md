@@ -42,6 +42,7 @@
 | identifier | 確定型 | union | explicit mixed | implicit mixed |
 |---|---|---|---|---|
 | `argument.type` | 5 | 8 | 9 | 10 |
+| `binaryOp.invalid` | 2 | 7 | 9 | 10 |
 | `cast.string` | 2 | 7 | 9 | 10 |
 | `echo.nonString` | 2 | 7 | 9 | 10 |
 | `equal.alwaysFalse` | 4 | — | — | — |
@@ -63,19 +64,57 @@
 | `variable.undefined` | 条件分岐の中だけで代入 | 1 |
 | `encapsedStringPart.nonString` | 文字列補間内 | 2 |
 | `property.notFound` | 動的プロパティへの**書き込み** | 2 |
+| `assignOp.invalid` | 非数値文字列への複合代入（`$x -= 1`） | 2 |
+| `offsetAccess.notFound` | **形状の無い汎用配列**への `??` 無しの読み取り（下記「必須パラメータ」が有効な場合のみ。無効ならどの level でも出ない） | 7 |
 
 **測定条件**
 
 | 項目 | 値 |
 |---|---|
-| PHPStan | 2.2.6（最大 level は **10**。level 11 は存在しない） |
+| PHPStan | 2.2.8（最大 level は **10**。level 11 は存在しない） |
 | `phpVersion` | 80300（`--php-version=8.3`） |
 | 走査 level 範囲 | 0〜10 総当たり |
 | stub 構成 | **なし**（検体自身の PHPDoc から型を作る。プロジェクト非依存） |
-| 検体 | `scripts/probes/phpstan/`（マーカー 39 件） |
-| 実測日 | 2026-08-05 |
+| 必須パラメータ | `reportPossiblyNonexistentGeneralArrayOffset` / `reportPossiblyNonexistentConstantArrayOffset` を true |
+| 検体 | `scripts/probes/phpstan/`（マーカー 45 件） |
+| 実測日 | 2026-09-24 |
 
-**この表から読むべきこと:** (1) `array\|false` を返す関数に**型注釈があれば** level 7 で捕まるが、**型注釈が無ければ level 10 まで黙る**。レガシーコードはまさに後者の形をしている。(2) `offsetAccess.notFound`（「そのキーは無い」）は **mixed に対しては存在しない** —— 形状が分かる型にしか成立せず、mixed では `offsetAccess.nonOffsetAccessible` に化ける。(3) `equal.alwaysFalse` は**両辺の型が静的に確定する場合しか出ない**。DB・外部入力由来の mixed には原理的に無力であり、`in_array()` の第3引数なし呼び出しは**一切検出できない**（`breaking-changes.md` §7 が引き受ける）。
+初版（PHPStan 2.2.6・必須パラメータ無効・マーカー 39 件・2026-08-05）から、既存行の値は1つも変わっていない。増えたのは `binaryOp.invalid` / `assignOp.invalid` と、汎用配列の `offsetAccess.notFound` の行だけである。
+
+**この表から読むべきこと:** (1) `array\|false` を返す関数に**型注釈があれば** level 7 で捕まるが、**型注釈が無ければ level 10 まで黙る**。レガシーコードはまさに後者の形をしている。(2) `offsetAccess.notFound`（「そのキーは無い」）は **mixed に対しては存在しない** —— 配列だと分かる型（形状の無い `array` は必須パラメータ有効時のみ。(4)）にしか成立せず、mixed では `offsetAccess.nonOffsetAccessible` に化ける。(3) `equal.alwaysFalse` は**両辺の型が静的に確定する場合しか出ない**。DB・外部入力由来の mixed には原理的に無力であり、`in_array()` の第3引数なし呼び出しは**一切検出できない**（`breaking-changes.md` §7 が引き受ける）。(4) 汎用配列の `offsetAccess.notFound`（下限 7）は**必須パラメータを有効にしたときの値**である。無効なら level 10 でも出ない。level だけを見て「最大にしたから全部見えている」と読まない。
+
+### 必須パラメータ — level とは独立した感度
+
+**フェーズ1 の PHPStan 設定では、level を最大にすることに加えて、次の2つを必ず有効にする。** どちらも既定は false である。
+
+```neon
+parameters:
+    reportPossiblyNonexistentGeneralArrayOffset: true
+    reportPossiblyNonexistentConstantArrayOffset: true
+```
+
+| 設定 | 検出するようになるもの | 例 |
+|---|---|---|
+| `reportPossiblyNonexistentGeneralArrayOffset` | **形状の無い汎用配列**（`array` / `array<string, mixed>`）への `??` 無しの読み取り | `$f = is_array($f) ? $f : [];` の後の `$f['period_start']` |
+| `reportPossiblyNonexistentConstantArrayOffset` | 形状が分かる配列を**定数でないキー**で読む | `$c = ['x' => 1, 'y' => 2]; $c[$k]` |
+
+**形状の無い汎用配列への読み取りは、level ではなくこの設定でしか検出されない。** `array|false` を `is_array()` で確定させると、型は形状の無い `array` になる。ACF の `get_fields()` を推奨どおりにガードした後の `$f['key']` は、まさにこの形である（`references/wordpress-notes.md`「ACF 関数の戻り値契約」）。
+
+**実測**（PHPStan 2.2.8 / `phpVersion` 80300 / level 0〜10 総当たり / stub なし / 2026-09-24。検体は `scripts/probes/phpstan/general-array-offset.php`）
+
+| 読み取り | 設定 off | 設定 on |
+|---|---|---|
+| `$f['period_start']`（`is_array()` で確定させた `array<string, mixed>`） | **level 0〜10 すべて 0 件** | level 7 から `offsetAccess.notFound`（`Offset 'period_start' might not exist on array<string, mixed>.`） |
+| `$f['period_start'] ?? null` | 0 件 | **0 件**（`??` で守った読み取りは報告されない） |
+| `$c[$k]`（定数配列 × 変数キー） | 0 件 | level 7 から `offsetAccess.notFound` |
+
+**実例（WordPress + ACF、PHP 7.4 → 8.3）**: 本番で `Warning: Undefined array key "period_start"` が出た。該当コードは `get_fields()` の戻り値を `is_array()` で確定させたうえで `??` 無しで読んでいた。level 10 のゲートは 0 件で、当初は「PHPStan では検出不能（W7）」と扱われかけた。上記2設定を足しただけで、同型が **161 件**検出された。**`why_missed` は W7 ではなく W1（設定値誤り）である。**
+
+| 規定 | 理由 |
+|---|---|
+| 増えた指摘を `ignoreErrors` / baseline で消さない | `??` で守られていない読み取りは、キーが欠けたデータで実際に Warning になる。ノイズではなく仕分けの対象である（`references/triage-ledger.md`） |
+| 設定の有無は `scripts/verify-gate.sh --gate=phpstan` で確かめる | 検体の期待集合は自己校正するため、設定が無いと基準線からも同時に消えて見えない。この設定に依存する項目だけは固定の期待として扱い、欠けていれば **DEGRADED** になる |
+| `scripts/probe-phpstan-levels.sh` は両設定を常に true で走査する | false で測ると汎用配列の行がどの level でも「—」になり、「ツールの限界」と誤読させる |
 
 **level を上げるコストは解析時間ではない。** 実測では level 5 → 10 で解析時間・メモリはほぼ不変（差 2% 未満）。障壁は**報告件数の増加と、それを人手で仕分けるコスト**である。したがって対策は「level を下げる」ではなく「**level は最大にし、判定対象を identifier で絞る**」が正しい。
 
@@ -141,8 +180,9 @@ level を上げると、PHP バージョンと無関係な指摘（型宣言の�
 | 3 | 前提が欠けている（stub / bootstrapFiles） | 対象 API の型が mixed に落ちていないか。stub を外して件数が変わらなければ、stub は効いていない |
 | 4 | スコープが潰されている | `scripts/verify-gate.sh --gate=phpstan --plant-dir=<対象内>` |
 | 5 | 抑止されている | `ignoreErrors` / baseline に入っていないか |
+| 6 | level と独立した感度パラメータが無効 | §2「必須パラメータ」の2設定が true か。**形状の無い汎用配列への読み取りは、level ではなくこの設定でしか検出されない** |
 
-**4点すべてを否定できて初めて「ツールの原理的限界」と記録してよい。** 実行時ログで出た欠陥が静的解析で出なかったとき、設定を疑わずに「ツールの限界」と結論づけるのは典型的な誤りである。
+**上の表をすべて否定できて初めて「ツールの原理的限界」と記録してよい。** 実行時ログで出た欠陥が静的解析で出なかったとき、設定を疑わずに「ツールの限界」と結論づけるのは典型的な誤りである。実例: `Undefined array key` を「PHPStan では検出不能（W7）」と扱いかけたが、実際は #6 の設定漏れ（W1）だった（§2「必須パラメータ」）。
 
 **レビュー対象を「0 件だったから」で絞らない。** 静的解析の件数が 0 でも、そのカテゴリの目視レビューを飛ばさない。件数はスコープの決定に使ってよいが、**スコープから外す根拠には使えない**。
 
@@ -161,10 +201,10 @@ level を上げると、PHP バージョンと無関係な指摘（型宣言の�
 
 | ゲート | バージョン | 自己検証 | 設定 | 結果 |
 |---|---|---|---|---|
-| PHPStan | 2.2.6 | VERIFIED (4/4) | level 9 / phpVersion 80300 / stubs: acf-pro, wp-cli | PASS |
+| PHPStan | 2.2.8 | VERIFIED (8/8) | level 10 / phpVersion 80300 / 必須パラメータ: on / stubs: acf-pro, wp-cli | PASS |
 | PHPCompatibility | 9.3.5 | DEGRADED (0/9) | testVersion 8.3 | SKIPPED (degraded) |
 
-**有効 identifier**: offsetAccess.* / property.nonObject / property.notFound / foreach.nonIterable / variable.undefined
+**有効 identifier**: offsetAccess.* / property.nonObject / property.notFound / foreach.nonIterable / variable.undefined / binaryOp.invalid / assignOp.invalid
 **除外 identifier と理由**: missingType.*（型宣言不足。ランタイム挙動と無関係。201 件）
                             argument.type（メッセージ二次フィルタ未整備のため第2段へ繰り延べ。149 件）
 **PHPCompatibility の穴を埋めたゲート**: 削除API → PHPStan function.notFound ／ 非推奨API → 実行時ログ
@@ -173,7 +213,7 @@ level を上げると、PHP バージョンと無関係な指摘（型宣言の�
 
 結果は4値で表記する。`PASS`（VERIFIED かつ未仕分け 0 件）／ `FAIL`（未仕分けが1件以上）／ `SKIPPED (degraded)`（DEGRADED。検出できた範囲を明記する）／ `SKIPPED (unverified)`（自己検証を未実施）／ `NOT-RUN`（BLIND または未実行）。**`PASS` 以外はすべて合格ではない。**
 
-**level と、有効／除外 identifier を必ず併記する。** どの強度で測ったかが伝わらない報告は、次の担当者に「全部見た」と誤読される。
+**level と、有効／除外 identifier を必ず併記する。** どの強度で測ったかが伝わらない報告は、次の担当者に「全部見た」と誤読される。§2「必須パラメータ」の on/off も同じ理由で併記する（level 10 でも off なら汎用配列への読み取りは見ていない）。
 
 ---
 

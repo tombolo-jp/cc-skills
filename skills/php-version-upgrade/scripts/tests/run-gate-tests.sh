@@ -8,7 +8,13 @@
 #
 # 動作:
 #   `scripts/phpstan-gate.sh` の終了コード分岐を、外部コマンドをスタブに置き換えて
-#   すべて実際に実行する。
+#   すべて実際に実行する。あわせて次も検査する。
+#   - `scripts/verify-gate.sh --gate=phpstan` の3値判定。特に**感度パラメータ
+#     （`reportPossiblyNonexistentGeneralArrayOffset`）が無い neon で DEGRADED になること**
+#   - `scripts/probe-phpstan-levels.sh` が検体（`probes/phpstan/*.php`）を読み、
+#     感度パラメータを有効にした neon で走査していること
+#   - 検体の `@probe-expect` に現れる identifier が、既定のホワイトリスト
+#     （`scripts/php8-identifiers.txt`）に全件載っていること
 #
 #   ★ `bash -n` と `shellcheck` は必須だが**不十分**である。
 #     `set -e` 下の終了コード捕捉漏れも、日本語メッセージ中の `$var）` 形式の展開も、
@@ -29,12 +35,22 @@ IFS=$'\n\t'
 TEST_DIR="$(cd -- "$(dirname -- "$0")" && pwd)"
 SCRIPTS_DIR="$(cd -- "${TEST_DIR}/.." && pwd)"
 GATE="${SCRIPTS_DIR}/phpstan-gate.sh"
+VERIFY="${SCRIPTS_DIR}/verify-gate.sh"
+LEVELS="${SCRIPTS_DIR}/probe-phpstan-levels.sh"
+IDS_DEFAULT="${SCRIPTS_DIR}/php8-identifiers.txt"
+PROBES_PHPSTAN="${SCRIPTS_DIR}/probes/phpstan"
 STUB="${TEST_DIR}/stubs/phpstan-stub.sh"
 
 if [ ! -x "${GATE}" ]; then
   printf 'Error: ゲートスクリプトが実行可能ではありません: %s\n' "${GATE}" >&2
   exit 2
 fi
+for s in "${VERIFY}" "${LEVELS}"; do
+  if [ ! -x "${s}" ]; then
+    printf 'Error: スクリプトが実行可能ではありません: %s\n' "${s}" >&2
+    exit 2
+  fi
+done
 if [ ! -x "${STUB}" ]; then
   printf 'Error: スタブが実行可能ではありません: %s\n' "${STUB}" >&2
   exit 2
@@ -202,6 +218,85 @@ else
   printf '  [NG]   %-52s\n' "0 件のとき verify-gate.sh の案内が出ていない"
   fail=$((fail + 1))
 fi
+
+printf '\n=== verify-gate.sh --gate=phpstan の3値判定 ===\n'
+
+run_script_case() {
+  # $1: 説明 / $2: 期待終了コード / $3: 出力に含まれるべき文字列（空なら検査しない）/ 残り: コマンド
+  local desc="$1"; shift
+  local expect="$1"; shift
+  local want="$1"; shift
+  local actual=0
+  local out
+  out="$("$@" 2>&1)" || actual=$?
+  if [ "${actual}" -ne "${expect}" ]; then
+    printf '  [NG]   %-52s exit=%s（期待 %s）\n' "${desc}" "${actual}" "${expect}"
+    printf '%s\n' "${out}" | sed 's/^/         | /'
+    fail=$((fail + 1))
+  elif [ -n "${want}" ] && ! printf '%s' "${out}" | grep -qF -- "${want}"; then
+    printf '  [NG]   %-52s 出力に「%s」が無い\n' "${desc}" "${want}"
+    printf '%s\n' "${out}" | sed 's/^/         | /'
+    fail=$((fail + 1))
+  else
+    printf '  [OK]   %-52s exit=%s\n' "${desc}" "${actual}"
+    pass=$((pass + 1))
+  fi
+}
+
+PLANT="${ROOT}/plant"
+mkdir -p "${PLANT}"
+printf 'parameters:\n    level: 10\n    reportPossiblyNonexistentGeneralArrayOffset: true\n    reportPossiblyNonexistentConstantArrayOffset: true\n' \
+  > "${ROOT}/phpstan-offset-on.neon"
+printf 'parameters:\n    level: 10\n' > "${ROOT}/phpstan-offset-off.neon"
+export PHPSTAN_FAKE_PLANT_DIR="${PLANT}"
+
+PHPSTAN_FAKE=verify run_script_case "感度パラメータあり → VERIFIED" 0 "VERIFIED" \
+  "${VERIFY}" --gate=phpstan --plant-dir="${PLANT}" --config="${ROOT}/phpstan-offset-on.neon" --phpstan="${STUB}"
+
+PHPSTAN_FAKE=verify run_script_case "感度パラメータなし → DEGRADED（★自己校正で隠れない）" 1 \
+  "reportPossiblyNonexistentGeneralArrayOffset" \
+  "${VERIFY}" --gate=phpstan --plant-dir="${PLANT}" --config="${ROOT}/phpstan-offset-off.neon" --phpstan="${STUB}"
+
+PHPSTAN_FAKE=verify-excluded run_script_case "設置先がスコープ外 → BLIND" 1 "BLIND" \
+  "${VERIFY}" --gate=phpstan --plant-dir="${PLANT}" --config="${ROOT}/phpstan-offset-on.neon" --phpstan="${STUB}"
+
+if find "${PLANT}" -name '__gate_probe_*' | grep -q .; then
+  printf '  [NG]   %-52s\n' "検体が撤去されずに残っている"
+  fail=$((fail + 1))
+else
+  printf '  [OK]   %-52s\n' "検体はすべて撤去されている"
+  pass=$((pass + 1))
+fi
+
+printf '\n=== probe-phpstan-levels.sh が検体と感度パラメータを扱えるか ===\n'
+
+PHPSTAN_FAKE=levels run_script_case "汎用配列オフセット（変種 general）を測れる" 0 \
+  "$(printf 'offsetAccess.notFound\tgeneral')" \
+  "${LEVELS}" --php-version=8.3 --phpstan="${STUB}" --format=tsv
+
+printf '\n=== 検体の identifier がホワイトリストに載っているか（denylist 原則） ===\n'
+
+# ホワイトリストの有効行（コメント・空行を除く。末尾 `*` はワイルドカード）
+wl="$(sed -e 's/#.*//' -e 's/[[:space:]]*$//' -e '/^[[:space:]]*$/d' "${IDS_DEFAULT}")"
+probe_ids="$(grep -hE '^[[:space:]]*// @probe-expect[[:space:]]' "${PROBES_PHPSTAN}"/*.php \
+  | sed -n 's/.*@probe-expect[[:space:]]\{1,\}\([^[:space:]]\{1,\}\).*/\1/p' | sort -u)"
+for id in ${probe_ids}; do
+  hit=0
+  for w in ${wl}; do
+    case "${w}" in
+      *'*') [ "${id#"${w%\*}"}" != "${id}" ] && hit=1 ;;
+      *)    [ "${id}" = "${w}" ] && hit=1 ;;
+    esac
+    [ "${hit}" -eq 1 ] && break
+  done
+  if [ "${hit}" -eq 1 ]; then
+    printf '  [OK]   %-52s\n' "${id}"
+    pass=$((pass + 1))
+  else
+    printf '  [NG]   %-52s ホワイトリストに無い\n' "${id}"
+    fail=$((fail + 1))
+  fi
+done
 
 printf '\n=== 結果 ===\n'
 printf '  成功 %s 件 / 失敗 %s 件\n' "${pass}" "${fail}"

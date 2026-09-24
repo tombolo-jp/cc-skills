@@ -2,7 +2,8 @@
 # ゲート自己検証 — 「そのゲートは、既知の非互換を実際に検出できるか」を能動的に確かめる
 #
 # 使い方:
-#   scripts/verify-gate.sh --gate=phpstan   --plant-dir=wp-content/themes/mytheme [--config=phpstan.neon]
+#   scripts/verify-gate.sh --gate=phpstan   --plant-dir=wp-content/themes/mytheme [--config=phpstan.neon] \
+#                          [--phpstan=/path/to/phpstan]
 #   scripts/verify-gate.sh --gate=phpcompat --plant-dir=wp-content/themes/mytheme --testversion=8.3
 #   scripts/verify-gate.sh --gate=logger    --logger=scripts/php-migration-logger.php \
 #                          --log=/tmp/probe.log --php-bin=/path/to/php
@@ -22,6 +23,12 @@
 #   --gate=phpstan の固有価値は「`excludePaths` がスコープを黙って潰していないか」を
 #   検出できる**唯一の手段**である点にある。件数を見るだけでは
 #   「9割除外されているが1割は解析されている」状態を拾えない。
+#
+#   --gate=phpstan の期待集合は検体単独の解析で自己校正するが、**level と独立した
+#   感度パラメータ**（references/detection-gates.md §2「必須パラメータ」）は自己校正では
+#   測れない（設定が無ければ基準線からも同時に消え、「期待どおり」に見えてしまう）。
+#   そのため検体中の `// @gate-require <identifier> <設定名>` を**直後の1行**に対する
+#   固定の期待として扱い、基準線に現れなければ DEGRADED とする。
 #
 # 終了コード:
 #   0 : VERIFIED（期待した全項目を期待した重大度で検出。以後この 0 件は PASS と表記してよい）
@@ -43,6 +50,7 @@ TESTVERSION=""
 LOGGER=""
 LOGFILE=""
 PHP_BIN=""
+PHPSTAN_BIN=""
 KEEP=0
 MEMORY_LIMIT="1G"
 
@@ -58,10 +66,11 @@ while [ "$#" -gt 0 ]; do
     --logger=*)      LOGGER="${arg#--logger=}" ;;
     --log=*)         LOGFILE="${arg#--log=}" ;;
     --php-bin=*)     PHP_BIN="${arg#--php-bin=}" ;;
+    --phpstan=*)     PHPSTAN_BIN="${arg#--phpstan=}" ;;
     --keep)          KEEP=1 ;;
     --memory-limit=*) MEMORY_LIMIT="${arg#--memory-limit=}" ;;
     -h|--help)
-      sed -n '2,30p' "$0" >&2
+      sed -n '2,37p' "$0" >&2
       exit 2
       ;;
     *)
@@ -184,7 +193,13 @@ case "${GATE}" in
   # ------------------------------------------------------------------
   phpstan)
     require_plant_dir
-    PHPSTAN_BIN="$(find_bin_require phpstan)" || exit 2
+    if [ -z "${PHPSTAN_BIN}" ]; then
+      PHPSTAN_BIN="$(find_bin_require phpstan)" || exit 2
+    fi
+    if [ ! -x "${PHPSTAN_BIN}" ] && ! command -v "${PHPSTAN_BIN}" >/dev/null 2>&1; then
+      printf 'Error: phpstan を実行できません: %s\n' "${PHPSTAN_BIN}" >&2
+      exit 2
+    fi
     [ -n "${CONFIG}" ] || CONFIG="phpstan.neon"
     if [ ! -f "${CONFIG}" ]; then
       printf 'Error: PHPStan 設定ファイルがありません: %s\n' "${CONFIG}" >&2
@@ -200,6 +215,8 @@ case "${GATE}" in
 class GateProbeDeclared { public int $declared = 0; }
 /** @return array|false */
 function gate_probe_array_or_false() { return false; }
+/** @return array<string, mixed>|false */
+function gate_probe_general_array() { return false; }
 function gate_probe_never_called(): void
 {
     $v = gate_probe_array_or_false();
@@ -209,6 +226,10 @@ function gate_probe_never_called(): void
     $sink = $o->undeclaredProperty;
     $sink = $undefinedVariable;
     $sink = (string) [1, 2];
+    $f = gate_probe_general_array();
+    $f = is_array($f) ? $f : [];
+    // @gate-require offsetAccess.notFound reportPossiblyNonexistentGeneralArrayOffset
+    $sink = $f['period_start'];
     unset($sink);
 }
 PROBE
@@ -244,6 +265,28 @@ PROBE
       exit 2
     fi
 
+    # 感度パラメータに依存する固定の期待（@gate-require）を基準線と突き合わせる。
+    # 基準線に無いものは「スコープ内で観測できるはずがない」ので、期待数にだけ加算する
+    #（＝必ず DEGRADED 以下になる）。自己校正に任せると、設定が無い neon で VERIFIED になる。
+    REQ_MISSING="${TMPD}/required-missing.tsv"
+    : > "${REQ_MISSING}"
+    while IFS= read -r hit; do
+      [ -n "${hit}" ] || continue
+      req_line=$(( ${hit%%:*} + 1 ))
+      body="${hit#*:}"
+      req_id="$(printf '%s' "${body}" | sed -n 's/.*@gate-require[[:space:]]\{1,\}\([^[:space:]]\{1,\}\).*/\1/p')"
+      req_set="$(printf '%s' "${body}" | sed -n 's/.*@gate-require[[:space:]]\{1,\}[^[:space:]]\{1,\}[[:space:]]\{1,\}\([^[:space:]]\{1,\}\).*/\1/p')"
+      [ -n "${req_id}" ] || continue
+      # shellcheck disable=SC2016
+      if ! "${JQ_BIN}" -e --arg id "${req_id}" --argjson ln "${req_line}" '
+          [ .files // {} | .[].messages[] | select(.line == $ln and .identifier == $id) ] | length > 0
+        ' "${TMPD}/base.json" >/dev/null 2>&1; then
+        printf '%s\t%s\n' "${req_id}" "${req_set:-不明}" >> "${REQ_MISSING}"
+      fi
+    done < <(grep -nE '^[[:space:]]*// @gate-require[[:space:]]' "${PROBE_SRC}" 2>/dev/null || true)
+    req_missing_n=$(wc -l < "${REQ_MISSING}" | tr -d ' ')
+    expected_n=$((expected_n + req_missing_n))
+
     # 次に**解析対象スコープ内**へ設置し、プロジェクトの実運用設定で解析する。
     PLANTED="${PLANT_DIR}/__gate_probe_${PROBE_STAMP}.php"
     plant_file "${PLANTED}" < "${PROBE_SRC}"
@@ -275,13 +318,17 @@ PROBE
     if [ "${found_n}" -lt "${expected_n}" ]; then
       printf '  検出できなかった identifier:\n'
       comm -23 <(sort "${TMPD}/expected.txt") <(sort "${TMPD}/observed.txt") | sed 's/^/    - /'
+      awk -F'\t' '{ printf "    - %s（検体単独でも未検出。%s が無効か level 不足）\n", $1, $2 }' "${REQ_MISSING}"
     fi
 
     PHPSTAN_VER="$("${PHPSTAN_BIN}" --version 2>/dev/null | head -1 || true)"
     # shellcheck disable=SC2016
     FILL_PHPSTAN='  — スコープが潰されている場合 → phpstan.neon の `excludePaths` / `paths` を実測で見直す
   — level が低い場合           → `scripts/probe-phpstan-levels.sh` で下限 level を実測する
-  — stub 不足の場合            → 対象 API の stub を `scanFiles` へ追加する'
+  — stub 不足の場合            → 対象 API の stub を `scanFiles` へ追加する
+  — 必須パラメータ欠落の場合   → `reportPossiblyNonexistentGeneralArrayOffset` /
+                                 `reportPossiblyNonexistentConstantArrayOffset` を true にする
+                                 （references/detection-gates.md §2「必須パラメータ」）'
 
     if [ "${found_n}" -eq 0 ]; then
       report_verdict "PHPStan" "${PHPSTAN_VER}" BLIND 0 "${expected_n}" "${FILL_PHPSTAN}"
@@ -292,6 +339,13 @@ PROBE
       verdict_code=1
     elif [ "${found_n}" -lt "${expected_n}" ]; then
       report_verdict "PHPStan" "${PHPSTAN_VER}" DEGRADED "${found_n}" "${expected_n}" "${FILL_PHPSTAN}"
+      if [ "${req_missing_n}" -gt 0 ]; then
+        printf '\n★ level と独立した感度パラメータが欠けています（または level が足りません）。\n'
+        # shellcheck disable=SC2016
+        printf '  `is_array()` で確定させた形状の無い配列への `$f['"'"'key'"'"']` 読み取りは、\n'
+        printf '  この設定が無いと**最大 level でも 0 件**になります。\n'
+        printf '  「PHPStan では検出不能（ツールの限界）」と記録する前に、設定を直してください。\n'
+      fi
       verdict_code=1
     else
       report_verdict "PHPStan" "${PHPSTAN_VER}" VERIFIED "${found_n}" "${expected_n}" ""
