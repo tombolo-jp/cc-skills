@@ -26,30 +26,37 @@ Claude Code 用のカスタムスキル集です。PHP バージョンアップ�
 
 ### 方式A: プラグインとして導入（推奨）
 
-このリポジトリはプラグイン（`cc-skills`）として、マーケットプレイス **`tombolo-jp`** から配布されます。マーケットプレイスの定義は [`tombolo-jp/cc-task-skills`](https://github.com/tombolo-jp/cc-task-skills) リポジトリの `.claude-plugin/marketplace.json` に置かれており、`cc-task-skills` と `cc-skills` の2つのプラグインを収録しています。
+このリポジトリは、プラグイン（`cc-skills`）とマーケットプレイス（`cc-skills`）を1つのリポジトリに同居させています。マーケットプレイスの定義は `.claude-plugin/marketplace.json` にあり、プラグインの実体は同じリポジトリ内（`"source": "./"`）なので、マーケットプレイスを追加すれば追加の `git clone` なしでプラグインを導入できます。
 
-> **なぜマーケットプレイスが別リポジトリにあるのか**: 1つのマーケットプレイスは複数のプラグインを収録でき、各プラグインの実体は別リポジトリでも構いません。一方で**マーケットプレイスは名前で一意に識別され、同名のものを追加すると後から追加した方が前のものを置き換えます**。そのため `tombolo-jp` という名札は1箇所だけが名乗り、スキル集はその下にプラグインとしてぶら下げる構成にしています。スキル集が増えてもマーケットプレイスは1つのままです。
-
-> **前提**: 上記のマーケットプレイス登録（`cc-task-skills` 側の `marketplace.json` への `cc-skills` エントリ追加）が済んでいる必要があります。未登録の場合、`/plugin install cc-skills@tombolo-jp` はプラグインを見つけられません。
+> **旧構成からの移行**: 以前は `tombolo-jp/cc-task-skills` のマーケットプレイス `tombolo-jp` から `cc-skills@tombolo-jp` として配布していました。現在は各リポジトリが自分のマーケットプレイスを持つ構成に変わっています。旧構成で導入済みの場合は、後述「[旧構成からの移行](#旧構成からの移行)」を実施してください。
 
 **A-1. 手元の Claude Code に導入する（ローカル）**
 
 Claude Code 上で以下を実行します：
 ```
-/plugin marketplace add tombolo-jp/cc-task-skills
-/plugin install cc-skills@tombolo-jp
+/plugin marketplace add tombolo-jp/cc-skills
+/plugin install cc-skills@cc-skills
 ```
-
-`marketplace add` に指定するのは `cc-task-skills` リポジトリですが、これは**マーケットプレイス定義の置き場所**を指しているだけで、`cc-task-skills` プラグイン自体が導入されるわけではありません。両方を使いたい場合は `/plugin install cc-task-skills@tombolo-jp` も続けて実行します。
 
 既定で user スコープ（`~/.claude/settings.json`）に記録されるため、**一度実行すれば手元の全プロジェクトで使えます**。プロジェクトごとの設定は不要です。
 
-> **前提: GitHub への SSH 接続が必要です（ローカル導入のみ）。** プラグイン本体のクローンは
-> `git@github.com:tombolo-jp/cc-skills.git` の形式で実行されるため、SSH 鍵が未設定だと
-> 次のように失敗します。**リポジトリは public ですが、HTTPS ではクローンされません。**
+[`cc-task-skills`](https://github.com/tombolo-jp/cc-task-skills) も使う場合は、そちらのマーケットプレイスを別途追加します：
+```
+/plugin marketplace add tombolo-jp/cc-task-skills
+/plugin install cc-task-skills@cc-task-skills
+```
+
+> **前提: `owner/repo` 形式の指定は GitHub への SSH 接続が必要です（ローカル導入のみ）。** `tombolo-jp/cc-skills` のような省略形は
+> `git@github.com:tombolo-jp/cc-skills.git` の形式でクローンされるため、SSH 鍵が未設定だと
+> 次のように失敗します。**リポジトリは public ですが、省略形では HTTPS ではクローンされません。**
+> SSH を設定したくない場合は、HTTPS の URL で追加すれば SSH は不要です。
 >
 > ```
-> ✘ Failed to install plugin "cc-skills@tombolo-jp": Failed to clone repository:
+> /plugin marketplace add https://github.com/tombolo-jp/cc-skills.git
+> ```
+>
+> ```
+> ✘ Failed to install plugin "cc-skills@cc-skills": Failed to clone repository:
 > git@github.com: Permission denied (publickey).
 > ```
 >
@@ -110,32 +117,35 @@ Claude Code 上で以下を実行します：
 ```json
 {
   "extraKnownMarketplaces": {
-    "tombolo-jp": {
+    "cc-skills": {
       "source": {
         "source": "github",
-        "repo": "tombolo-jp/cc-task-skills"
+        "repo": "tombolo-jp/cc-skills"
       }
     }
   },
   "enabledPlugins": {
-    "cc-skills@tombolo-jp": true
+    "cc-skills@cc-skills": true
   }
 }
 ```
 
 リポジトリごとに1回コミットするだけで、以後そのリポジトリのクラウドセッションでは自動的に有効になります。設定がリポジトリに入るため、同じリポジトリで作業するメンバー全員に同じスキルが行き渡ります。
 
-[`cc-task-skills`](https://github.com/tombolo-jp/cc-task-skills) と併用する場合も、マーケットプレイスは同じ1つなので `enabledPlugins` に1行足すだけです：
+[`cc-task-skills`](https://github.com/tombolo-jp/cc-task-skills) と併用する場合は、そちらのマーケットプレイスも追加します：
 ```json
 {
   "extraKnownMarketplaces": {
-    "tombolo-jp": {
+    "cc-skills": {
+      "source": { "source": "github", "repo": "tombolo-jp/cc-skills" }
+    },
+    "cc-task-skills": {
       "source": { "source": "github", "repo": "tombolo-jp/cc-task-skills" }
     }
   },
   "enabledPlugins": {
-    "cc-skills@tombolo-jp": true,
-    "cc-task-skills@tombolo-jp": true
+    "cc-skills@cc-skills": true,
+    "cc-task-skills@cc-task-skills": true
   }
 }
 ```
@@ -147,10 +157,11 @@ Claude Code 上で以下を実行します：
 claude.ai のクラウド環境設定を開き、**Setup script** 欄に以下を記述します：
 ```bash
 #!/bin/bash
-claude plugin marketplace add tombolo-jp/cc-task-skills --scope user || true
-claude plugin install cc-skills@tombolo-jp --scope user || true
-# cc-task-skills も使う場合は次の行も追加する
-# claude plugin install cc-task-skills@tombolo-jp --scope user || true
+claude plugin marketplace add tombolo-jp/cc-skills --scope user || true
+claude plugin install cc-skills@cc-skills --scope user || true
+# cc-task-skills も使う場合は次の2行も追加する
+# claude plugin marketplace add tombolo-jp/cc-task-skills --scope user || true
+# claude plugin install cc-task-skills@cc-task-skills --scope user || true
 ```
 
 - セットアップスクリプトは **Claude Code の起動前**に root 権限で実行され、書き込んだ内容は環境キャッシュに保持されます。
@@ -178,7 +189,7 @@ claude plugin install cc-skills@tombolo-jp --scope user || true
 
 プラグインはバージョン番号を持たず、コミット SHA で更新が判定されます。最新化するには：
 ```
-/plugin marketplace update tombolo-jp
+/plugin marketplace update cc-skills
 ```
 
 ### 方式B: 個人スキルとしてコピー
@@ -207,6 +218,17 @@ rm -rf ~/.claude/skills/php-version-upgrade ~/.claude/skills/ddev-colima-setup \
        ~/.claude/skills/playwright-cli ~/.claude/skills/setup-project-docs \
        ~/.claude/skills/figma-coding
 ```
+
+### 旧構成からの移行
+
+旧構成（`cc-skills@tombolo-jp`）で導入済みの場合は、次の順で入れ直します。マーケットプレイス名が変わったため、そのままでは更新されません。
+```
+/plugin uninstall cc-skills@tombolo-jp
+/plugin marketplace remove tombolo-jp
+/plugin marketplace add tombolo-jp/cc-skills
+/plugin install cc-skills@cc-skills
+```
+`cc-task-skills` も `tombolo-jp` から導入していた場合は、`marketplace remove` の前に `/plugin uninstall cc-task-skills@tombolo-jp` を実行し、あとで `cc-task-skills@cc-task-skills` として入れ直してください。クラウド環境では、利用側リポジトリの `.claude/settings.json` やセットアップスクリプトの記述も、上記の新しい名前に書き換えます。
 
 ### 共通の設定
 
@@ -261,9 +283,8 @@ rm -rf ~/.claude/skills/php-version-upgrade ~/.claude/skills/ddev-colima-setup \
 ```
 cc-skills/
 ├── .claude-plugin/
-│   └── plugin.json               # プラグイン定義（cc-skills）
-│                                 # マーケットプレイス定義 (tombolo-jp) は
-│                                 # tombolo-jp/cc-task-skills 側に置かれている
+│   ├── plugin.json               # プラグイン定義（cc-skills）
+│   └── marketplace.json          # マーケットプレイス定義（cc-skills）
 ├── skills/
 │   ├── ddev-colima-setup/
 │   ├── figma-coding/

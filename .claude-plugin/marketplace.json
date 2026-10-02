@@ -1,0 +1,16 @@
+{
+  "name": "cc-skills",
+  "owner": {
+    "name": "Yuki Kokubo",
+    "url": "https://github.com/tombolo-jp"
+  },
+  "plugins": [
+    {
+      "name": "cc-skills",
+      "source": "./",
+      "description": "PHPバージョンアップ・DDEV/Colima 環境構築・ブラウザ自動操作・プロジェクト文書整備・Figma デザインからのコーディングを支援する Claude Code スキル集",
+      "category": "development",
+      "keywords": ["php", "wordpress", "ddev", "colima", "playwright", "documentation", "figma", "design", "mcp"]
+    }
+  ]
+}

@@ -6,13 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 このリポジトリは Claude Code 用のカスタムスキル集であり、**アプリケーションではなくスキルそのもの**です。同時に、リポジトリ自体がプラグイン（`cc-skills`）として機能します。これにより、手元の Claude Code だけでなく**クラウドセッション（claude.ai/code 等）からも同じスキルを利用できます**。
 
-マーケットプレイス定義（`tombolo-jp`）は本リポジトリではなく [`tombolo-jp/cc-task-skills`](https://github.com/tombolo-jp/cc-task-skills) の `.claude-plugin/marketplace.json` にあり、そこから `cc-task-skills` と `cc-skills` の2プラグインが配布されます。**マーケットプレイスは名前で一意に識別され、同名のものを追加すると後勝ちで置き換わる**ため、`tombolo-jp` を名乗る定義は1箇所に限り、スキル集はその下にプラグインとしてぶら下げます。本リポジトリに `marketplace.json` を置いてはいけません。
+マーケットプレイス定義（`cc-skills`）も本リポジトリの `.claude-plugin/marketplace.json` に同居させています。プラグインの `source` は `"./"`（同一リポジトリ内）で、`marketplace add` だけで実体が揃い、追加の `git clone` が発生しません。以前は `tombolo-jp/cc-task-skills` のマーケットプレイス `tombolo-jp` に `source: github` で登録していましたが、プラグインごとに別途 clone が走り、SSH 鍵の無い環境で更新・読み込みが失敗したため、**1リポジトリ1マーケットプレイス**の構成に改めました。`cc-task-skills` も同様に、自身のマーケットプレイス `cc-task-skills` を持ちます。**マーケットプレイスは名前で一意に識別され、同名のものを追加すると後勝ちで置き換わる**ため、`name` は他リポジトリのものと重複させないでください。
 
 ## リポジトリ構成
 
 | パス | 役割 |
 |---|---|
-| `.claude-plugin/plugin.json` | プラグイン定義。`name` は `cc-skills`。マーケットプレイス定義はここには置かない（上記参照） |
+| `.claude-plugin/plugin.json` | プラグイン定義。`name` は `cc-skills` |
+| `.claude-plugin/marketplace.json` | マーケットプレイス定義。`name` は `cc-skills`、プラグインは `"source": "./"` で同一リポジトリを指す |
 | `skills/<skill>/SKILL.md` | 各スキルの**仕様の正本**であり実行エントリポイント。frontmatter の `name` はディレクトリ名と一致させる |
 | `skills/<skill>/references/*.md` | SKILL.md から切り出した規約。該当フェーズに着手した時点でのみ読み込む |
 | `skills/<skill>/templates/*` | 生成物のテンプレート。生成の直前に読み込む |
@@ -21,20 +22,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## マーケットプレイスへの登録内容
 
-`tombolo-jp/cc-task-skills` の `.claude-plugin/marketplace.json` の `plugins` 配列に、本リポジトリが次のエントリとして登録されています。プラグイン名や説明を変えるときは、そちらも合わせて更新してください。
-
-```json
-{
-  "name": "cc-skills",
-  "source": {
-    "source": "github",
-    "repo": "tombolo-jp/cc-skills"
-  },
-  "description": "PHPバージョンアップ・DDEV/Colima 環境構築・ブラウザ自動操作・プロジェクト文書整備・Figma デザインからのコーディングを支援する Claude Code スキル集",
-  "category": "development",
-  "keywords": ["php", "wordpress", "ddev", "colima", "playwright", "documentation", "figma", "design", "mcp"]
-}
-```
+導入コマンドは `/plugin marketplace add tombolo-jp/cc-skills` と `/plugin install cc-skills@cc-skills` です。プラグイン名や説明を変えるときは、`plugin.json` と `marketplace.json` の両方を更新してください。マーケットプレイスの `name` やプラグインの `name` を変えると利用者の入れ直しが必要になるため、README の「旧構成からの移行」に準じた移行手順を添えてください。
 
 ## スキルを追加・変更するときの規約
 
@@ -43,7 +31,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 3. **`description` には発火トリガーを含める。** 日本語スキルでは「トリガー: ...」の形で代表的な呼び出し語を列挙します。
 4. **`allowed-tools` はカンマ区切りで書く。** 空白区切りは解釈されません。
 5. **スキル自身のディレクトリを参照するときは導入方法に依存しない書き方をする。** 導入経路によって実体パスが変わるため、`~/.claude/skills/<name>/` と決め打ちしないこと。プラグイン導入時は `${CLAUDE_PLUGIN_ROOT}/skills/<name>/`、コピー導入時は `~/.claude/skills/<name>/` になります。
-6. **スキルを追加したら `README.md` の「収録スキル」表と「クラウドセッションでの注意点」を更新する。** `plugin.json` は個々のスキルを列挙しないため変更不要です。`cc-task-skills` 側の `marketplace.json` も、プラグイン単位の登録なので変更不要です。
+6. **スキルを追加したら `README.md` の「収録スキル」表と「クラウドセッションでの注意点」を更新する。** `plugin.json` と `marketplace.json` は個々のスキルを列挙しないため変更不要です。
 
 ## クラウドセッションを前提にした記述
 

@@ -39,8 +39,8 @@ PHP のバージョンを上げるとき、Rector（PHP のコードを新しい
 このスキルは [`tombolo-jp/cc-skills`](https://github.com/tombolo-jp/cc-skills) プラグインに含まれます。**クラウドセッション（claude.ai/code 等）でも使いたい場合はプラグインとして導入してください。**
 
 ```
-/plugin marketplace add tombolo-jp/cc-task-skills
-/plugin install cc-skills@tombolo-jp
+/plugin marketplace add tombolo-jp/cc-skills
+/plugin install cc-skills@cc-skills
 ```
 
 導入方法の詳細（クラウドセッションでの有効化を含む）はリポジトリルートの [README](../../README.md) を参照してください。
