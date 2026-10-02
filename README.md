@@ -28,7 +28,7 @@ Claude Code 用のカスタムスキル集です。PHP バージョンアップ�
 
 このリポジトリは、プラグイン（`cc-skills`）とマーケットプレイス（`cc-skills`）を1つのリポジトリに同居させています。マーケットプレイスの定義は `.claude-plugin/marketplace.json` にあり、プラグインの実体は同じリポジトリ内（`"source": "./"`）なので、マーケットプレイスを追加すれば追加の `git clone` なしでプラグインを導入できます。
 
-> **旧構成からの移行**: 以前は `tombolo-jp/cc-task-skills` のマーケットプレイス `tombolo-jp` から `cc-skills@tombolo-jp` として配布していました。現在は各リポジトリが自分のマーケットプレイスを持つ構成に変わっています。旧構成で導入済みの場合は、後述「[旧構成からの移行](#旧構成からの移行)」を実施してください。
+> **旧構成からの移行**: 以前はマーケットプレイス `tombolo-jp` から `cc-skills@tombolo-jp` として配布していました。旧構成で導入済みの場合は、後述「[旧構成からの移行](#旧構成からの移行)」を実施してください。
 
 **A-1. 手元の Claude Code に導入する（ローカル）**
 
@@ -39,66 +39,6 @@ Claude Code 上で以下を実行します：
 ```
 
 既定で user スコープ（`~/.claude/settings.json`）に記録されるため、**一度実行すれば手元の全プロジェクトで使えます**。プロジェクトごとの設定は不要です。
-
-[`cc-task-skills`](https://github.com/tombolo-jp/cc-task-skills) も使う場合は、そちらのマーケットプレイスを別途追加します：
-```
-/plugin marketplace add tombolo-jp/cc-task-skills
-/plugin install cc-task-skills@cc-task-skills
-```
-
-> **前提: `owner/repo` 形式の指定は GitHub への SSH 接続が必要です（ローカル導入のみ）。** `tombolo-jp/cc-skills` のような省略形は
-> `git@github.com:tombolo-jp/cc-skills.git` の形式でクローンされるため、SSH 鍵が未設定だと
-> 次のように失敗します。**リポジトリは public ですが、省略形では HTTPS ではクローンされません。**
-> SSH を設定したくない場合は、HTTPS の URL で追加すれば SSH は不要です。
->
-> ```
-> /plugin marketplace add https://github.com/tombolo-jp/cc-skills.git
-> ```
->
-> ```
-> ✘ Failed to install plugin "cc-skills@cc-skills": Failed to clone repository:
-> git@github.com: Permission denied (publickey).
-> ```
->
-> エラー文面は「リポジトリが存在しないか権限が無い」と読めますが、原因は SSH 鍵です。
-> 未設定の場合は [GitHub の手順](https://docs.github.com/authentication/connecting-to-github-with-ssh)
-> に従って鍵を作成・登録したうえで、**プラグイン導入より先に一度**次を実行してください。
->
-> ```bash
-> ssh -T git@github.com   # Hi <ユーザー名>! ... と出れば成功（終了コード 1 は正常）
-> ```
->
-> **この事前接続は省略できません。** クローン時の ssh は `BatchMode=yes` /
-> `StrictHostKeyChecking=yes` で起動するため、`~/.ssh/known_hosts` に github.com が
-> 無いとホストキーの確認プロンプトを出せずに失敗します。鍵を登録しただけでは足りません。
->
-> **鍵にパスフレーズがある場合は、エージェントへの登録も必須です。** `BatchMode=yes` は
-> パスフレーズの入力も求められないため、鍵が GitHub に登録済みでもクローンは同じ
-> `Permission denied (publickey)` で落ちます。次を一度実行してキーチェーンに載せてください
-> （macOS 以外では `--apple-use-keychain` を外す）。
->
-> ```bash
-> ssh-add --apple-use-keychain ~/.ssh/id_ed25519
-> ssh-add -l   # 鍵が 1 行表示されれば OK。"The agent has no identities." なら未登録
-> ```
->
-> 再起動後も有効にするには `~/.ssh/config` に次を書いておきます。
->
-> ```
-> Host github.com
->   IdentityFile ~/.ssh/id_ed25519
->   AddKeysToAgent yes
->   UseKeychain yes
-> ```
->
-> **`Permission denied (publickey)` を「鍵が未登録」と即断しないでください。** 切り分けは
-> `ssh -vT git@github.com` の出力で行います。`Offering public key: ... SHA256:...` が
-> 出ていれば鍵は提示されており、未登録ではありません（その場合はパスフレーズ／エージェント側を疑う）。
-> また**ターミナルを介さない実行経路**（エディタのタスク、CI、エージェントからの実行など）では
-> TTY が無く、パスフレーズのプロンプトを出せずに同じエラーになります。手元のシェルで
-> `ssh -o BatchMode=yes -T git@github.com` が成功することを、切り分けの基準にしてください。
->
-> なお A-2 のクラウドセッションではこの準備は不要です（コンテナ側で認証されます）。
 
 **A-2. クラウドセッションで使う**
 
@@ -132,24 +72,6 @@ Claude Code 上で以下を実行します：
 
 リポジトリごとに1回コミットするだけで、以後そのリポジトリのクラウドセッションでは自動的に有効になります。設定がリポジトリに入るため、同じリポジトリで作業するメンバー全員に同じスキルが行き渡ります。
 
-[`cc-task-skills`](https://github.com/tombolo-jp/cc-task-skills) と併用する場合は、そちらのマーケットプレイスも追加します：
-```json
-{
-  "extraKnownMarketplaces": {
-    "cc-skills": {
-      "source": { "source": "github", "repo": "tombolo-jp/cc-skills" }
-    },
-    "cc-task-skills": {
-      "source": { "source": "github", "repo": "tombolo-jp/cc-task-skills" }
-    }
-  },
-  "enabledPlugins": {
-    "cc-skills@cc-skills": true,
-    "cc-task-skills@cc-task-skills": true
-  }
-}
-```
-
 **A-2-2. クラウド環境のセットアップスクリプトで導入する（全リポジトリに効く）**
 
 クラウド環境（Environment）はリポジトリに紐づかず、ブラウザ・デスクトップアプリ・モバイル・`claude --cloud`・Routines のすべてで共有されます。そのため環境側に仕込んでおけば、**利用側リポジトリに何も置かずに全プロジェクトで使えます**。
@@ -159,9 +81,6 @@ claude.ai のクラウド環境設定を開き、**Setup script** 欄に以下�
 #!/bin/bash
 claude plugin marketplace add tombolo-jp/cc-skills --scope user || true
 claude plugin install cc-skills@cc-skills --scope user || true
-# cc-task-skills も使う場合は次の2行も追加する
-# claude plugin marketplace add tombolo-jp/cc-task-skills --scope user || true
-# claude plugin install cc-task-skills@cc-task-skills --scope user || true
 ```
 
 - セットアップスクリプトは **Claude Code の起動前**に root 権限で実行され、書き込んだ内容は環境キャッシュに保持されます。
@@ -228,7 +147,7 @@ rm -rf ~/.claude/skills/php-version-upgrade ~/.claude/skills/ddev-colima-setup \
 /plugin marketplace add tombolo-jp/cc-skills
 /plugin install cc-skills@cc-skills
 ```
-`cc-task-skills` も `tombolo-jp` から導入していた場合は、`marketplace remove` の前に `/plugin uninstall cc-task-skills@tombolo-jp` を実行し、あとで `cc-task-skills@cc-task-skills` として入れ直してください。クラウド環境では、利用側リポジトリの `.claude/settings.json` やセットアップスクリプトの記述も、上記の新しい名前に書き換えます。
+クラウド環境では、利用側リポジトリの `.claude/settings.json` やセットアップスクリプトの記述も、上記の新しい名前に書き換えます。
 
 ### 共通の設定
 
