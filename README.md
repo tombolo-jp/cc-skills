@@ -28,8 +28,6 @@ Claude Code 用のカスタムスキル集です。PHP バージョンアップ�
 
 このリポジトリは、プラグイン（`cc-skills`）とマーケットプレイス（`cc-skills`）を1つのリポジトリに同居させています。マーケットプレイスの定義は `.claude-plugin/marketplace.json` にあり、プラグインの実体は同じリポジトリ内（`"source": "./"`）なので、マーケットプレイスを追加すれば追加の `git clone` なしでプラグインを導入できます。
 
-> **旧構成からの移行**: 以前はマーケットプレイス `tombolo-jp` から `cc-skills@tombolo-jp` として配布していました。旧構成で導入済みの場合は、後述「[旧構成からの移行](#旧構成からの移行)」を実施してください。
-
 **A-1. 手元の Claude Code に導入する（ローカル）**
 
 Claude Code 上で以下を実行します：
@@ -137,17 +135,6 @@ rm -rf ~/.claude/skills/php-version-upgrade ~/.claude/skills/ddev-colima-setup \
        ~/.claude/skills/playwright-cli ~/.claude/skills/setup-project-docs \
        ~/.claude/skills/figma-coding
 ```
-
-### 旧構成からの移行
-
-旧構成（`cc-skills@tombolo-jp`）で導入済みの場合は、次の順で入れ直します。マーケットプレイス名が変わったため、そのままでは更新されません。
-```
-/plugin uninstall cc-skills@tombolo-jp
-/plugin marketplace remove tombolo-jp
-/plugin marketplace add tombolo-jp/cc-skills
-/plugin install cc-skills@cc-skills
-```
-クラウド環境では、利用側リポジトリの `.claude/settings.json` やセットアップスクリプトの記述も、上記の新しい名前に書き換えます。
 
 ### 共通の設定
 

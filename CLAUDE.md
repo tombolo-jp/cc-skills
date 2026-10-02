@@ -22,7 +22,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## マーケットプレイスへの登録内容
 
-導入コマンドは `/plugin marketplace add tombolo-jp/cc-skills` と `/plugin install cc-skills@cc-skills` です。プラグイン名や説明を変えるときは、`plugin.json` と `marketplace.json` の両方を更新してください。マーケットプレイスの `name` やプラグインの `name` を変えると利用者の入れ直しが必要になるため、README の「旧構成からの移行」に準じた移行手順を添えてください。
+導入コマンドは `/plugin marketplace add tombolo-jp/cc-skills` と `/plugin install cc-skills@cc-skills` です。プラグイン名や説明を変えるときは、`plugin.json` と `marketplace.json` の両方を更新してください。マーケットプレイスの `name` やプラグインの `name` を変えると利用者の入れ直しが必要になるため、変更する前に影響を確認してください。
 
 ## スキルを追加・変更するときの規約
 
